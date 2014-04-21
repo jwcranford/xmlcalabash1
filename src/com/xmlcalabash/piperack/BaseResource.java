@@ -263,6 +263,8 @@ public class BaseResource extends ServerResource {
                 }
                 pipeconfig.outputs.put(port, nodes);
             }
+        } catch (XProcException e) {
+        	throw e;
         } catch (Exception e) {
             throw new XProcException(e);
         }

@@ -91,17 +91,20 @@ public class Main {
         }
 
         try {
-            XProcConfiguration config = userArgs.createConfiguration();
-
-            if (run(userArgs, config)) {
-                // It's just sooo much nicer if there's a newline at the end.
-                System.out.println();
-            }
-
-            // Here all memory should be freed by the next gc, right?
-            runtime.close();
+	        if (run(userArgs)) {
+	            // It's just sooo much nicer if there's a newline at the end.
+	            System.out.println();
+	        }
         } catch (UnsupportedOperationException uoe) {
             usage();
+        }  
+    }
+
+	public boolean run(UserArgs userArgs) {
+		try {
+            XProcConfiguration config = userArgs.createConfiguration();
+            
+            return run(userArgs, config);
         } catch (XProcException err) {
             exitStatus = 1;
             if (err.getErrorCode() != null) {
@@ -122,6 +125,7 @@ public class Main {
             if (debug) {
                 err.printStackTrace();
             }
+            return false;
         } catch (Exception err) {
             exitStatus = 1;
             error(logger, null, "Pipeline failed: " + err.toString(), null);
@@ -132,8 +136,12 @@ public class Main {
             if (debug) {
                 err.printStackTrace();
             }
+            return false;
+        } finally {
+        	 // Here all memory should be freed by the next gc, right?
+            runtime.close();
         }
-    }
+	}
 
     boolean run(UserArgs userArgs, XProcConfiguration config) throws SaxonApiException, IOException, URISyntaxException {
         runtime = new XProcRuntime(config);

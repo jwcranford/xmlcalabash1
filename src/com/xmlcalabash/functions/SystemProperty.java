@@ -30,7 +30,7 @@ public class SystemProperty extends XProcExtensionFunctionDefinition {
      }
 
      public SystemProperty(XProcRuntime runtime) {
-         tl_runtime.set(runtime);
+         registry.registerRuntime(this, runtime);
      }
 
      public StructuredQName getFunctionQName() {
@@ -54,11 +54,16 @@ public class SystemProperty extends XProcExtensionFunctionDefinition {
      }
 
      public ExtensionFunctionCall makeCallExpression() {
-         return new SystemPropertyCall();
+         return new SystemPropertyCall(this);
      }
 
     private class SystemPropertyCall extends ExtensionFunctionCall {
-         private StaticContext staticContext = null;
+        private StaticContext staticContext = null;
+        private XProcExtensionFunctionDefinition xdef = null;
+
+        public SystemPropertyCall(XProcExtensionFunctionDefinition def) {
+            xdef = def;
+        }
 
          public void supplyStaticContext(StaticContext context, int locationId, Expression[] arguments) throws XPathException {
              staticContext = context;
@@ -67,7 +72,7 @@ public class SystemProperty extends XProcExtensionFunctionDefinition {
         public Sequence call(XPathContext xPathContext, Sequence[] sequences) throws XPathException {
              StructuredQName propertyName = null;
 
-             XProcRuntime runtime = tl_runtime.get();
+             XProcRuntime runtime = registry.getRuntime(xdef);
              XStep step = runtime.getXProcData().getStep();
              // FIXME: this can't be the best way to do this...
              // FIXME: And what, exactly, is this even supposed to be doing!?
@@ -126,6 +131,8 @@ public class SystemProperty extends XProcExtensionFunctionDefinition {
                      value = runtime.getAllowXPointerOnText() ? "true" : "false";
                  } else if ("use-xslt-1.0".equals(local) || "use-xslt-10".equals(local)) {
                      value = runtime.getUseXslt10Processor() ? "true" : "false";
+                 } else if ("html-serializer".equals(local)) {
+                     value = runtime.getHtmlSerializer() ? "true" : "false";
                  } else if ("saxon-version".equals(local)) {
                      value = runtime.getConfiguration().getProcessor().getSaxonProductVersion();
                  } else if ("saxon-edition".equals(local)) {

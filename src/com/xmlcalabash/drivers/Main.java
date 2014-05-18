@@ -151,33 +151,7 @@ public class Main {
             XProcConfiguration.showVersion(runtime);
         }
 
-        XPipeline pipeline = null;
-
-        if (userArgs.getPipeline() != null) {
-            pipeline = runtime.load(userArgs.getPipeline());
-        } else if (userArgs.hasImplicitPipeline()) {
-            XdmNode implicitPipeline = userArgs.getImplicitPipeline(runtime);
-
-            if (debug) {
-                System.err.println("Implicit pipeline:");
-
-                Serializer serializer = new Serializer();
-
-                serializer.setOutputProperty(Serializer.Property.INDENT, "yes");
-                serializer.setOutputProperty(Serializer.Property.METHOD, "xml");
-
-                serializer.setOutputStream(System.err);
-
-                S9apiUtils.serialize(runtime, implicitPipeline, serializer);
-            }
-
-            pipeline = runtime.use(implicitPipeline);
-        } else if (config.pipeline != null) {
-            XdmNode doc = config.pipeline.read();
-            pipeline = runtime.use(doc);
-        } else {
-            throw new UnsupportedOperationException("Either a pipeline or libraries and / or steps must be given");
-        }
+        final XPipeline pipeline = createPipeline(userArgs, config);
 
         // Process parameters from the configuration...
         for (String port : config.params.keySet()) {
@@ -425,6 +399,52 @@ public class Main {
         return portOutputs.containsValue(null);
     }
 
+    
+	/**
+	 * Loads or uses the pipeline specified by the UserArgs or 
+	 * XProcConfiguration, in that order.
+	 * 
+	 * @param userArgs
+	 * @param config
+	 * @return the new XPipeline
+	 * @throws SaxonApiException
+	 * @throws IOException if there's an I/O error creating and using 
+	 * 		temporary files in the process of constructing an implicit pipeline
+	 * 		from the UserArgs.
+	 */
+	private XPipeline createPipeline(UserArgs userArgs,
+			XProcConfiguration config) throws SaxonApiException, IOException {
+		XPipeline pipeline = null;
+
+        if (userArgs.getPipeline() != null) {
+            pipeline = runtime.load(userArgs.getPipeline());
+        } else if (userArgs.hasImplicitPipeline()) {
+            XdmNode implicitPipeline = userArgs.getImplicitPipeline(runtime);
+
+            if (debug) {
+                System.err.println("Implicit pipeline:");
+
+                Serializer serializer = new Serializer();
+
+                serializer.setOutputProperty(Serializer.Property.INDENT, "yes");
+                serializer.setOutputProperty(Serializer.Property.METHOD, "xml");
+
+                serializer.setOutputStream(System.err);
+
+                S9apiUtils.serialize(runtime, implicitPipeline, serializer);
+            }
+
+            pipeline = runtime.use(implicitPipeline);
+        } else if (config.pipeline != null) {
+            XdmNode doc = config.pipeline.read();
+            pipeline = runtime.use(doc);
+        } else {
+            throw new UnsupportedOperationException("Either a pipeline or libraries and / or steps must be given");
+        }
+		return pipeline;
+	}
+
+	
     private void setParametersOnPipeline(XPipeline pipeline, String port, Map<QName, String> parameters) {
         if ("*".equals(port)) {
             for (QName name : parameters.keySet()) {

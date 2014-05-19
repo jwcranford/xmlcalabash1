@@ -108,9 +108,7 @@ public class Main {
 
 	public boolean run(UserArgs userArgs) {
 		try {
-            config = userArgs.createConfiguration();
-            
-            return run(userArgs, config);
+            return run(userArgs, userArgs.createConfiguration());
         } catch (XProcException err) {
             exitStatus = 1;
             if (err.getErrorCode() != null) {
@@ -147,9 +145,10 @@ public class Main {
 	}
 
     boolean run(UserArgs userArgs, XProcConfiguration config) throws SaxonApiException, IOException, URISyntaxException {
+    	this.config = config;
+    	this.debug = config.debug;
     	final XProcRuntime runtime = new XProcRuntime(config);
     	try {
-    		debug = config.debug;
 
     		if (userArgs.isShowVersion()) {
     			XProcConfiguration.showVersion(config);
@@ -443,8 +442,8 @@ public class Main {
             }
 
             pipeline = runtime.use(implicitPipeline);
-        } else if (config.pipeline != null) {
-            XdmNode doc = config.pipeline.read();
+        } else if (runtime.getConfiguration().pipeline != null) {
+            XdmNode doc = runtime.getConfiguration().pipeline.read();
             pipeline = runtime.use(doc);
         } else {
             throw new UnsupportedOperationException("Either a pipeline or libraries and / or steps must be given");

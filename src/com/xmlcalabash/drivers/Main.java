@@ -33,6 +33,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import javax.xml.transform.sax.SAXSource;
+
 import com.xmlcalabash.core.XProcConfiguration;
 import com.xmlcalabash.core.XProcConstants;
 import com.xmlcalabash.core.XProcException;
@@ -50,12 +52,16 @@ import com.xmlcalabash.util.ParseArgs;
 import com.xmlcalabash.util.S9apiUtils;
 import com.xmlcalabash.util.UserArgs;
 import net.sf.saxon.s9api.Axis;
+import net.sf.saxon.s9api.DocumentBuilder;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.Serializer;
 import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmSequenceIterator;
 import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.XMLReader;
+import org.xml.sax.helpers.XMLReaderFactory;
 
 import static com.xmlcalabash.core.XProcConstants.c_data;
 import static com.xmlcalabash.util.Output.Kind.OUTPUT_STREAM;
@@ -483,7 +489,7 @@ public class Main {
     	if (runtime != null) {
     		InputStream instream = getClass().getResourceAsStream("/etc/error-list.xml");
     		if (instream != null) {
-    			XdmNode doc = runtime.parse(new InputSource(instream));
+    			XdmNode doc = parse(new InputSource(instream));
     			XdmSequenceIterator iter = doc.axisIterator(Axis.DESCENDANT, new QName(XProcConstants.NS_XPROC_ERROR,"error"));
     			while (iter.hasNext()) {
     				XdmNode error = (XdmNode) iter.next();
@@ -495,6 +501,33 @@ public class Main {
     	}
         return "Unknown error";
     }
+    
+
+    // adapted from XProcRuntime.parse(), without the XProcRuntime dependencies
+    private XdmNode parse(InputSource isource) {
+        try {
+            // Make sure the builder uses our entity resolver
+            XMLReader reader = XMLReaderFactory.createXMLReader();
+//            reader.setEntityResolver(this);
+            SAXSource source = new SAXSource(reader, isource);
+            DocumentBuilder builder = runtime.getProcessor().newDocumentBuilder();
+            builder.setLineNumbering(true);
+            builder.setDTDValidation(false);
+            return builder.build(source);
+        } catch (SaxonApiException sae) {
+            String msg = sae.getMessage();
+            if (msg.contains("validation")) {
+                throw XProcException.stepError(27, sae);
+            } else if (msg.contains("HTTP response code: 403 ")) {
+                throw XProcException.dynamicError(21);
+            } else {
+                throw XProcException.dynamicError(11, sae);
+            }
+        } catch (SAXException e) {
+            throw new XProcException(e);
+        }
+    }
+
 
     // ===========================================================
     // Logging methods repeated here so that they don't rely

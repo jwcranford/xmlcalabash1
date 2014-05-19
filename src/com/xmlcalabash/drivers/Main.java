@@ -140,7 +140,9 @@ public class Main {
             return false;
         } finally {
         	 // Here all memory should be freed by the next gc, right?
-            runtime.close();
+        	if (runtime != null) {
+        		runtime.close();
+        	}
         }
 	}
 
@@ -478,17 +480,19 @@ public class Main {
     }
 
     private String errorMessage(QName code) {
-        InputStream instream = getClass().getResourceAsStream("/etc/error-list.xml");
-        if (instream != null) {
-            XdmNode doc = runtime.parse(new InputSource(instream));
-            XdmSequenceIterator iter = doc.axisIterator(Axis.DESCENDANT, new QName(XProcConstants.NS_XPROC_ERROR,"error"));
-            while (iter.hasNext()) {
-                XdmNode error = (XdmNode) iter.next();
-                if (code.getLocalName().equals(error.getAttributeValue(_code))) {
-                    return error.getStringValue();
-                }
-            }
-        }
+    	if (runtime != null) {
+    		InputStream instream = getClass().getResourceAsStream("/etc/error-list.xml");
+    		if (instream != null) {
+    			XdmNode doc = runtime.parse(new InputSource(instream));
+    			XdmSequenceIterator iter = doc.axisIterator(Axis.DESCENDANT, new QName(XProcConstants.NS_XPROC_ERROR,"error"));
+    			while (iter.hasNext()) {
+    				XdmNode error = (XdmNode) iter.next();
+    				if (code.getLocalName().equals(error.getAttributeValue(_code))) {
+    					return error.getStringValue();
+    				}
+    			}
+    		}
+    	}
         return "Unknown error";
     }
 

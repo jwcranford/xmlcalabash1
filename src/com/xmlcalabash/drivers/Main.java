@@ -68,6 +68,7 @@ import static java.lang.String.format;
 public class Main {
     private static QName _code = new QName("code");
     private static int exitStatus = 0;
+    private XProcConfiguration config = null;
     private XProcRuntime runtime = null;
     private Logger logger = Logger.getLogger(this.getClass().getName());
     private boolean debug = false;
@@ -102,7 +103,7 @@ public class Main {
 
 	public boolean run(UserArgs userArgs) {
 		try {
-            XProcConfiguration config = userArgs.createConfiguration();
+            config = userArgs.createConfiguration();
             
             return run(userArgs, config);
         } catch (XProcException err) {
@@ -148,7 +149,7 @@ public class Main {
         debug = config.debug;
 
         if (userArgs.isShowVersion()) {
-            XProcConfiguration.showVersion(runtime);
+            XProcConfiguration.showVersion(config);
         }
 
         final XPipeline pipeline = createPipeline(userArgs, config);
@@ -459,7 +460,7 @@ public class Main {
 
     private void usage() throws IOException {
         System.out.println();
-        XProcConfiguration.showVersion(runtime);
+        XProcConfiguration.showVersion(config);
 
         InputStream instream = getClass().getResourceAsStream("/etc/usage.txt");
         if (instream == null) {

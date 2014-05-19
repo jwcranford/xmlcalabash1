@@ -537,13 +537,13 @@ public class XProcConfiguration {
         }
     }
 
-    public static void showVersion(XProcRuntime runtime) {
+    public static void showVersion(XProcConfiguration config) {
         System.out.println("XML Calabash version " + XProcConstants.XPROC_VERSION + ", an XProc processor.");
-        if (runtime != null) {
+        if (config != null) {
             System.out.print("Running on Saxon version ");
-            System.out.print(runtime.getConfiguration().getProcessor().getSaxonProductVersion());
+            System.out.print(config.getProcessor().getSaxonProductVersion());
             System.out.print(", ");
-            System.out.print(runtime.getConfiguration().getProcessor().getUnderlyingConfiguration().getEditionCode());
+            System.out.print(config.getProcessor().getUnderlyingConfiguration().getEditionCode());
             System.out.println(" edition.");
         }
         System.out.println("Copyright (c) 2007-2013 Norman Walsh");

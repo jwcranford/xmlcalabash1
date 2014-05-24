@@ -601,7 +601,7 @@ public class UserArgs {
                         fileOutputStream.getChannel().transferFrom(newChannel(libraryInputStream), 0, MAX_VALUE);
                         libraries.set(0, new Input(tempLibrary.toURI().toASCIIString()));
                     } finally {
-                        Closer.close(fileOutputStream);
+                        Closer.getInstance().close(fileOutputStream);
                         libraryInputStream.close();
                     }
                 }
@@ -678,7 +678,7 @@ public class UserArgs {
                         tree.startContent();
                         tree.addEndElement();
                     } finally {
-                        Closer.close(fileOutputStream);
+                        Closer.getInstance().close(fileOutputStream);
                         libraryInputStream.close();
                     }
                     break;
@@ -753,7 +753,7 @@ public class UserArgs {
                                     tree.startContent();
                                     tree.addEndElement();
                                 } finally {
-                                    Closer.close(fileOutputStream);
+                                    Closer.getInstance().close(fileOutputStream);
                                     inputStream.close();
                                 }
                             }

@@ -49,6 +49,7 @@ import javax.xml.transform.sax.SAXSource;
 
 import com.xmlcalabash.util.Input;
 import com.xmlcalabash.util.Output;
+
 import net.sf.saxon.Configuration;
 import net.sf.saxon.lib.ExtensionFunctionDefinition;
 import net.sf.saxon.s9api.ExtensionFunction;
@@ -70,6 +71,8 @@ import org.apache.http.impl.client.StandardHttpRequestRetryHandler;
 import org.apache.http.impl.client.SystemDefaultHttpClient;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
+
+import static com.xmlcalabash.core.XProcConstants.c_data;
 
 import com.xmlcalabash.config.XProcConfigurer;
 import com.xmlcalabash.functions.BaseURI;
@@ -97,6 +100,7 @@ import com.xmlcalabash.runtime.XLibrary;
 import com.xmlcalabash.runtime.XPipeline;
 import com.xmlcalabash.runtime.XRootStep;
 import com.xmlcalabash.runtime.XStep;
+import com.xmlcalabash.util.Closer;
 import com.xmlcalabash.util.DefaultXProcConfigurer;
 import com.xmlcalabash.util.DefaultXProcMessageListener;
 import com.xmlcalabash.util.JSONtoXML;
@@ -589,9 +593,6 @@ public class XProcRuntime {
 
         try {
             return _load(pipeline);
-        } catch (SaxonApiException sae) {
-            error(sae);
-            throw sae;
         } catch (XProcException xe) {
             error(xe);
             throw xe;
@@ -601,7 +602,7 @@ public class XProcRuntime {
         }
     }
 
-    private XPipeline _load(Input pipelineInput) throws SaxonApiException, IOException {
+    private XPipeline _load(Input pipelineInput) throws IOException {
         reset();
         configurer.getXMLCalabashConfigurer().configRuntime(this);
         switch (pipelineInput.getKind()) {
@@ -643,18 +644,15 @@ public class XProcRuntime {
     }
 
     // FIXME: This design sucks
-    public XPipeline use(XdmNode p_pipeline) throws SaxonApiException {
+    public XPipeline use(XdmNode p_pipeline) {
         try {
             return _use(p_pipeline);
-        } catch (SaxonApiException sae) {
-            error(sae);
-            throw sae;
         } catch (XProcException xe) {
             error(xe);
             throw xe;
         }
     }
-    private XPipeline _use(XdmNode p_pipeline) throws SaxonApiException {
+    private XPipeline _use(XdmNode p_pipeline) {
         reset();
         configurer.getXMLCalabashConfigurer().configRuntime(this);
         pipeline = parser.usePipeline(p_pipeline);
@@ -789,9 +787,6 @@ public class XProcRuntime {
 
         try {
             loader = _load(new Input(loaderURI));
-        } catch (SaxonApiException sae) {
-            error(sae);
-            throw sae;
         } catch (XProcException xe) {
             error(xe);
             throw xe;
@@ -849,6 +844,70 @@ public class XProcRuntime {
     public XdmNode parse(InputSource isource) {
         return uriResolver.parse(isource);
     }
+    
+    
+    /**
+     * Parses the given input and returns the resulting XdmNode.
+     * 
+     * @throws IOException on an error closing the associated input stream
+     */
+    public XdmNode parse(Input input) throws IOException {
+        XdmNode doc = null;
+        switch (input.getType()) {
+            case XML:
+                switch (input.getKind()) {
+                    case URI:
+                        String uri = input.getUri();
+                        if ("-".equals(uri)) {
+                            doc = parse(new InputSource(System.in));
+                        } else {
+                            doc = parse(new InputSource(uri));
+                        }
+                        break;
+    
+                    case INPUT_STREAM:
+                        InputStream inputStream = input.getInputStream();
+                        try {
+                            doc = parse(new InputSource(inputStream));
+                        } finally {
+                            Closer.getInstance().close(inputStream);
+                        }
+                        break;
+    
+                    default:
+                        throw new UnsupportedOperationException(format("Unsupported input kind '%s'", input.getKind()));
+                }
+                break;
+    
+            case DATA:
+                ReadableData rd;
+                switch (input.getKind()) {
+                    case URI:
+                        rd = new ReadableData(this, c_data, input.getUri(), input.getContentType());
+                        doc = rd.read();
+                        break;
+    
+                    case INPUT_STREAM:
+                        InputStream inputStream = input.getInputStream();
+                        try {
+                            rd = new ReadableData(this, c_data, inputStream, input.getContentType());
+                            doc = rd.read();
+                        } finally {
+                            Closer.getInstance().close(inputStream);
+                        }
+                        break;
+    
+                    default:
+                        throw new UnsupportedOperationException(format("Unsupported input kind '%s'", input.getKind()));
+                }
+                break;
+    
+            default:
+                throw new UnsupportedOperationException(format("Unsupported input type '%s'", input.getType()));
+        }
+        return doc;
+    }
+    
 
     public void declareStep(QName name, DeclareStep step) {
         if (declaredSteps.containsKey(name)) {

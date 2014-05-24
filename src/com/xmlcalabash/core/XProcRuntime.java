@@ -643,18 +643,15 @@ public class XProcRuntime {
     }
 
     // FIXME: This design sucks
-    public XPipeline use(XdmNode p_pipeline) throws SaxonApiException {
+    public XPipeline use(XdmNode p_pipeline) {
         try {
             return _use(p_pipeline);
-        } catch (SaxonApiException sae) {
-            error(sae);
-            throw sae;
         } catch (XProcException xe) {
             error(xe);
             throw xe;
         }
     }
-    private XPipeline _use(XdmNode p_pipeline) throws SaxonApiException {
+    private XPipeline _use(XdmNode p_pipeline) {
         reset();
         configurer.getXMLCalabashConfigurer().configRuntime(this);
         pipeline = parser.usePipeline(p_pipeline);

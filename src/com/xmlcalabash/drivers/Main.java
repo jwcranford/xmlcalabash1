@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.logging.Logger;
 
 import com.xmlcalabash.core.XProcConfiguration;
-import com.xmlcalabash.core.XProcConstants;
 import com.xmlcalabash.core.XProcException;
 import com.xmlcalabash.core.XProcRuntime;
 import com.xmlcalabash.io.ReadableData;
@@ -43,18 +42,19 @@ import com.xmlcalabash.io.WritableDocument;
 import com.xmlcalabash.model.RuntimeValue;
 import com.xmlcalabash.model.Serialization;
 import com.xmlcalabash.runtime.XPipeline;
+import com.xmlcalabash.util.ErrorMessageRegistry;
 import com.xmlcalabash.util.Input;
 import com.xmlcalabash.util.Output;
-import com.xmlcalabash.util.Output.Kind;
 import com.xmlcalabash.util.ParseArgs;
 import com.xmlcalabash.util.S9apiUtils;
 import com.xmlcalabash.util.UserArgs;
-import net.sf.saxon.s9api.Axis;
+import com.xmlcalabash.util.Output.Kind;
+
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.Serializer;
 import net.sf.saxon.s9api.XdmNode;
-import net.sf.saxon.s9api.XdmSequenceIterator;
+
 import org.xml.sax.InputSource;
 
 import static com.xmlcalabash.core.XProcConstants.c_data;
@@ -66,11 +66,11 @@ import static java.lang.String.format;
  * @author ndw
  */
 public class Main {
-    private static QName _code = new QName("code");
     private static int exitStatus = 0;
     private XProcRuntime runtime = null;
     private Logger logger = Logger.getLogger(this.getClass().getName());
     private boolean debug = false;
+    private ErrorMessageRegistry errorRegistry = null;
 
     /**
      * @param args the command line arguments
@@ -449,19 +449,12 @@ public class Main {
     }
 
     private String errorMessage(QName code) {
-        InputStream instream = getClass().getResourceAsStream("/etc/error-list.xml");
-        if (instream != null) {
-            XdmNode doc = runtime.parse(new InputSource(instream));
-            XdmSequenceIterator iter = doc.axisIterator(Axis.DESCENDANT, new QName(XProcConstants.NS_XPROC_ERROR,"error"));
-            while (iter.hasNext()) {
-                XdmNode error = (XdmNode) iter.next();
-                if (code.getLocalName().equals(error.getAttributeValue(_code))) {
-                    return error.getStringValue();
-                }
-            }
+        if (errorRegistry == null) {
+        	errorRegistry = new ErrorMessageRegistry(runtime.getProcessor().newDocumentBuilder());
         }
-        return "Unknown error";
+        return errorRegistry.lookup(code);
     }
+    
 
     // ===========================================================
     // Logging methods repeated here so that they don't rely

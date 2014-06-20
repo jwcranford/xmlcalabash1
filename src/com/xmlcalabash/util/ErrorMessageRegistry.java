@@ -25,6 +25,7 @@ package com.xmlcalabash.util;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 
 import javax.xml.transform.sax.SAXSource;
 
@@ -40,14 +41,15 @@ import net.sf.saxon.s9api.XdmSequenceIterator;
 import org.xml.sax.InputSource;
 
 /**
+ * Registry that ties error codes to error messages.
  * 
- * 
- * @author JCRANFORD
- *
+ * @author Jonathan Cranford
  */
 public final class ErrorMessageRegistry {
 
-	private static final QName _code = new QName("code");
+	public static final String UNKNOWN_ERROR = "Unknown error";
+
+    private static final QName _code = new QName("code");
 	
 	private final Map<String, String> registry = new HashMap<String,String>();
 	
@@ -68,11 +70,18 @@ public final class ErrorMessageRegistry {
 	        	throw new UnsupportedOperationException("Error parsing error-list.xml from JAR file!", e);
 			} catch (RuntimeException e) {
 	        	throw new UnsupportedOperationException("Error parsing error-list.xml from JAR file!", e);
+			} finally {
+			    Closer.closeOrWarn(instream, Logger.getLogger(getClass().getName()));
 			}
         }
 	}
 	
 	
+	/**
+	 * Returns the error message that matches the given code.
+	 *  
+	 * @return registered error message, or UNKNOWN_ERROR if nothing matches
+	 */
 	public String lookup(QName code) {
 		if (code != null) {
             final String msg = registry.get(code.getLocalName());
@@ -80,6 +89,7 @@ public final class ErrorMessageRegistry {
                 return msg;
             }
         }
-        return "Unknown error";
+        return UNKNOWN_ERROR;
 	}
+
 }

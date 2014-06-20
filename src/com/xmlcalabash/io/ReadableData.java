@@ -281,7 +281,7 @@ public class ReadableData implements ReadablePipe {
         return ensureDocuments();
     }
 
-    public XdmNode read() throws SaxonApiException {
+    public XdmNode read() {
         DocumentSequence docs = ensureDocuments();
         XdmNode doc = docs.get(pos++);
         if (reader != null) {

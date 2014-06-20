@@ -20,6 +20,7 @@
 package com.xmlcalabash.drivers;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -137,7 +138,7 @@ public class Main {
         }
     }
 
-    boolean run(UserArgs userArgs, XProcConfiguration config) throws SaxonApiException, IOException, URISyntaxException {
+    public boolean run(UserArgs userArgs, XProcConfiguration config) throws SaxonApiException, IOException, URISyntaxException {
         runtime = new XProcRuntime(config);
         debug = config.debug;
 
@@ -215,61 +216,8 @@ public class Main {
             pipeline.clearInputs(port);
 
             if (userArgsInputPorts.contains(port)) {
-                XdmNode doc = null;
                 for (Input input : userArgs.getInputs(port)) {
-                    switch (input.getType()) {
-                        case XML:
-                            switch (input.getKind()) {
-                                case URI:
-                                    String uri = input.getUri();
-                                    if ("-".equals(uri)) {
-                                        doc = runtime.parse(new InputSource(System.in));
-                                    } else {
-                                        doc = runtime.parse(new InputSource(uri));
-                                    }
-                                    break;
-
-                                case INPUT_STREAM:
-                                    InputStream inputStream = input.getInputStream();
-                                    try {
-                                        doc = runtime.parse(new InputSource(inputStream));
-                                    } finally {
-                                        Closer.close(inputStream);
-                                    }
-                                    break;
-
-                                default:
-                                    throw new UnsupportedOperationException(format("Unsupported input kind '%s'", input.getKind()));
-                            }
-                            break;
-
-                        case DATA:
-                            ReadableData rd;
-                            switch (input.getKind()) {
-                                case URI:
-                                    rd = new ReadableData(runtime, c_data, input.getUri(), input.getContentType());
-                                    doc = rd.read();
-                                    break;
-
-                                case INPUT_STREAM:
-                                    InputStream inputStream = input.getInputStream();
-                                    try {
-                                        rd = new ReadableData(runtime, c_data, inputStream, input.getContentType());
-                                        doc = rd.read();
-                                    } finally {
-                                        Closer.close(inputStream);
-                                    }
-                                    break;
-
-                                default:
-                                    throw new UnsupportedOperationException(format("Unsupported input kind '%s'", input.getKind()));
-                            }
-                            break;
-
-                        default:
-                            throw new UnsupportedOperationException(format("Unsupported input type '%s'", input.getType()));
-                    }
-
+                    XdmNode doc = parse(runtime, input);
                     pipeline.writeTo(port, doc);
                 }
             } else {
@@ -389,29 +337,8 @@ public class Main {
                 }
             }
 
-            // I wonder if there's a better way...
-            WritableDocument wd = null;
-            if (output == null) {
-                wd = new WritableDocument(runtime, null, serial);
-            } else {
-                switch (output.getKind()) {
-                    case URI:
-                        URI furi = new URI(output.getUri());
-                        String filename = furi.getPath();
-                        FileOutputStream outfile = new FileOutputStream(filename);
-                        wd = new WritableDocument(runtime, filename, serial, outfile);
-                        break;
-
-                    case OUTPUT_STREAM:
-                        OutputStream outputStream = output.getOutputStream();
-                        wd = new WritableDocument(runtime, null, serial, outputStream);
-                        break;
-
-                    default:
-                        throw new UnsupportedOperationException(format("Unsupported output kind '%s'", output.getKind()));
-                }
-            }
-
+            WritableDocument wd = createWriteableDocument(runtime, serial, output);
+            
             try {
                 ReadablePipe rpipe = pipeline.readFrom(port);
                 while (rpipe.moreDocuments()) {
@@ -427,7 +354,111 @@ public class Main {
         return portOutputs.containsValue(null);
     }
 
-    private void setParametersOnPipeline(XPipeline pipeline, String port, Map<QName, String> parameters) {
+    /**
+     * Creates a WriteableDocument for the given output.
+     * 
+     * @throws URISyntaxException
+     *              if the output URI has a syntax problem
+     * @throws FileNotFoundException
+     *              if a file can't be created from the output URI 
+     */
+    public static WritableDocument createWriteableDocument(
+            XProcRuntime runtime,
+            Serialization serial, 
+            Output output)
+            throws URISyntaxException, FileNotFoundException {
+        // I wonder if there's a better way...
+        WritableDocument wd = null;
+        if (output == null) {
+            wd = new WritableDocument(runtime, null, serial);
+        } else {
+            switch (output.getKind()) {
+                case URI:
+                    URI furi = new URI(output.getUri());
+                    String filename = furi.getPath();
+                    FileOutputStream outfile = new FileOutputStream(filename);
+                    wd = new WritableDocument(runtime, filename, serial, outfile);
+                    break;
+        
+                case OUTPUT_STREAM:
+                    OutputStream outputStream = output.getOutputStream();
+                    wd = new WritableDocument(runtime, null, serial, outputStream);
+                    break;
+        
+                default:
+                    throw new UnsupportedOperationException(format("Unsupported output kind '%s'", output.getKind()));
+            }
+        }
+        return wd;
+    }
+
+    
+    /**
+     * Parses the given input with the given runtime and returns the resulting XdmNode.
+     * 
+     * @param input
+     * @return
+     * @throws IOException on an error closing the associated input stream
+     */
+    public static XdmNode parse(XProcRuntime runtime, Input input) throws IOException {
+        XdmNode doc = null;
+        switch (input.getType()) {
+            case XML:
+                switch (input.getKind()) {
+                    case URI:
+                        String uri = input.getUri();
+                        if ("-".equals(uri)) {
+                            doc = runtime.parse(new InputSource(System.in));
+                        } else {
+                            doc = runtime.parse(new InputSource(uri));
+                        }
+                        break;
+
+                    case INPUT_STREAM:
+                        InputStream inputStream = input.getInputStream();
+                        try {
+                            doc = runtime.parse(new InputSource(inputStream));
+                        } finally {
+                            Closer.close(inputStream);
+                        }
+                        break;
+
+                    default:
+                        throw new UnsupportedOperationException(format("Unsupported input kind '%s'", input.getKind()));
+                }
+                break;
+
+            case DATA:
+                ReadableData rd;
+                switch (input.getKind()) {
+                    case URI:
+                        rd = new ReadableData(runtime, c_data, input.getUri(), input.getContentType());
+                        doc = rd.read();
+                        break;
+
+                    case INPUT_STREAM:
+                        InputStream inputStream = input.getInputStream();
+                        try {
+                            rd = new ReadableData(runtime, c_data, inputStream, input.getContentType());
+                            doc = rd.read();
+                        } finally {
+                            Closer.close(inputStream);
+                        }
+                        break;
+
+                    default:
+                        throw new UnsupportedOperationException(format("Unsupported input kind '%s'", input.getKind()));
+                }
+                break;
+
+            default:
+                throw new UnsupportedOperationException(format("Unsupported input type '%s'", input.getType()));
+        }
+        return doc;
+    }
+
+    
+    public static void setParametersOnPipeline(XPipeline pipeline, String port, Map<QName, String> parameters) {
         if ("*".equals(port)) {
             for (QName name : parameters.keySet()) {
                 pipeline.setParameter(name, new RuntimeValue(parameters.get(name)));

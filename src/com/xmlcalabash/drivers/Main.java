@@ -37,14 +37,12 @@ import java.util.logging.Logger;
 import com.xmlcalabash.core.XProcConfiguration;
 import com.xmlcalabash.core.XProcException;
 import com.xmlcalabash.core.XProcRuntime;
-import com.xmlcalabash.io.ReadableData;
 import com.xmlcalabash.io.ReadablePipe;
 import com.xmlcalabash.io.WritableDocument;
 import com.xmlcalabash.model.RuntimeValue;
 import com.xmlcalabash.model.Serialization;
 import com.xmlcalabash.runtime.XPipeline;
 import com.xmlcalabash.util.ErrorMessageRegistry;
-import com.xmlcalabash.util.Closer;
 import com.xmlcalabash.util.Input;
 import com.xmlcalabash.util.Output;
 import com.xmlcalabash.util.ParseArgs;
@@ -59,7 +57,6 @@ import net.sf.saxon.s9api.XdmNode;
 
 import org.xml.sax.InputSource;
 
-import static com.xmlcalabash.core.XProcConstants.c_data;
 import static com.xmlcalabash.util.Output.Kind.OUTPUT_STREAM;
 import static java.lang.String.format;
 
@@ -217,7 +214,7 @@ public class Main {
 
             if (userArgsInputPorts.contains(port)) {
                 for (Input input : userArgs.getInputs(port)) {
-                    XdmNode doc = parse(runtime, input);
+                    XdmNode doc = runtime.parse(input);
                     pipeline.writeTo(port, doc);
                 }
             } else {
@@ -390,71 +387,6 @@ public class Main {
             }
         }
         return wd;
-    }
-
-    
-    /**
-     * Parses the given input with the given runtime and returns the resulting XdmNode.
-     * 
-     * @param input
-     * @return
-     * @throws IOException on an error closing the associated input stream
-     */
-    public static XdmNode parse(XProcRuntime runtime, Input input) throws IOException {
-        XdmNode doc = null;
-        switch (input.getType()) {
-            case XML:
-                switch (input.getKind()) {
-                    case URI:
-                        String uri = input.getUri();
-                        if ("-".equals(uri)) {
-                            doc = runtime.parse(new InputSource(System.in));
-                        } else {
-                            doc = runtime.parse(new InputSource(uri));
-                        }
-                        break;
-
-                    case INPUT_STREAM:
-                        InputStream inputStream = input.getInputStream();
-                        try {
-                            doc = runtime.parse(new InputSource(inputStream));
-                        } finally {
-                            Closer.close(inputStream);
-                        }
-                        break;
-
-                    default:
-                        throw new UnsupportedOperationException(format("Unsupported input kind '%s'", input.getKind()));
-                }
-                break;
-
-            case DATA:
-                ReadableData rd;
-                switch (input.getKind()) {
-                    case URI:
-                        rd = new ReadableData(runtime, c_data, input.getUri(), input.getContentType());
-                        doc = rd.read();
-                        break;
-
-                    case INPUT_STREAM:
-                        InputStream inputStream = input.getInputStream();
-                        try {
-                            rd = new ReadableData(runtime, c_data, inputStream, input.getContentType());
-                            doc = rd.read();
-                        } finally {
-                            Closer.close(inputStream);
-                        }
-                        break;
-
-                    default:
-                        throw new UnsupportedOperationException(format("Unsupported input kind '%s'", input.getKind()));
-                }
-                break;
-
-            default:
-                throw new UnsupportedOperationException(format("Unsupported input type '%s'", input.getType()));
-        }
-        return doc;
     }
 
     

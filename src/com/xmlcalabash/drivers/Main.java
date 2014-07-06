@@ -20,13 +20,9 @@
 package com.xmlcalabash.drivers;
 
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,21 +30,20 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import com.xmlcalabash.api.Calabash;
+import com.xmlcalabash.api.PipelineWrapper;
 import com.xmlcalabash.core.XProcConfiguration;
 import com.xmlcalabash.core.XProcException;
 import com.xmlcalabash.core.XProcRuntime;
 import com.xmlcalabash.io.ReadablePipe;
-import com.xmlcalabash.io.WritableDocument;
 import com.xmlcalabash.model.RuntimeValue;
-import com.xmlcalabash.model.Serialization;
 import com.xmlcalabash.runtime.XPipeline;
-import com.xmlcalabash.util.ErrorMessageRegistry;
 import com.xmlcalabash.util.Input;
 import com.xmlcalabash.util.Output;
+import com.xmlcalabash.util.Output.Kind;
 import com.xmlcalabash.util.ParseArgs;
 import com.xmlcalabash.util.S9apiUtils;
 import com.xmlcalabash.util.UserArgs;
-import com.xmlcalabash.util.Output.Kind;
 
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.SaxonApiException;
@@ -69,7 +64,7 @@ public class Main {
     private XProcConfiguration config = null;
     private Logger logger = Logger.getLogger(this.getClass().getName());
     private boolean debug = false;
-    private ErrorMessageRegistry errorRegistry = null;
+    private Calabash calabash = null;
 
     /**
      * @param args the command line arguments
@@ -102,7 +97,7 @@ public class Main {
         } catch (XProcException err) {
             exitStatus = 1;
             if (err.getErrorCode() != null) {
-                error(logger, null, errorMessage(err.getErrorCode()), err.getErrorCode());
+                error(logger, null, errorMessage(err), err.getErrorCode());
             } else {
                 error(logger, null, err.toString(), null);
             }
@@ -132,44 +127,45 @@ public class Main {
         } 
     }
 
-    public boolean run(UserArgs userArgs, XProcConfiguration config) throws SaxonApiException, IOException, URISyntaxException {
+    boolean run(UserArgs userArgs, XProcConfiguration config) throws SaxonApiException, IOException, URISyntaxException {
         this.config = config;
-        final XProcRuntime runtime = new XProcRuntime(config);
+        calabash = new Calabash(config);
+        debug = config.debug;
+
+        if (userArgs.isShowVersion()) {
+            XProcConfiguration.showVersion(config);
+        }
+
+        PipelineWrapper pipeline = null;
+
+        if (userArgs.getPipeline() != null) {
+            pipeline = calabash.loadPipeline(userArgs.getPipeline());
+        } else if (userArgs.hasImplicitPipeline()) {
+            final XProcRuntime runtime = new XProcRuntime(config);
+            XdmNode implicitPipeline = userArgs.getImplicitPipeline(runtime);
+
+            if (debug) {
+                System.err.println("Implicit pipeline:");
+
+                Serializer serializer = new Serializer();
+
+                serializer.setOutputProperty(Serializer.Property.INDENT, "yes");
+                serializer.setOutputProperty(Serializer.Property.METHOD, "xml");
+
+                serializer.setOutputStream(System.err);
+
+                S9apiUtils.serialize(runtime, implicitPipeline, serializer);
+            }
+
+            pipeline = new PipelineWrapper(runtime, runtime.use(implicitPipeline));
+        } else if (config.pipeline != null) {
+            XdmNode doc = config.pipeline.read();
+            pipeline = calabash.loadPipeline(doc);
+        } else {
+            throw new UnsupportedOperationException("Either a pipeline or libraries and / or steps must be given");
+        }
+
         try {
-            debug = config.debug;
-
-            if (userArgs.isShowVersion()) {
-                XProcConfiguration.showVersion(config);
-            }
-
-            XPipeline pipeline = null;
-
-            if (userArgs.getPipeline() != null) {
-                pipeline = runtime.load(userArgs.getPipeline());
-            } else if (userArgs.hasImplicitPipeline()) {
-                XdmNode implicitPipeline = userArgs.getImplicitPipeline(runtime);
-
-                if (debug) {
-                    System.err.println("Implicit pipeline:");
-
-                    Serializer serializer = new Serializer();
-
-                    serializer.setOutputProperty(Serializer.Property.INDENT, "yes");
-                    serializer.setOutputProperty(Serializer.Property.METHOD, "xml");
-
-                    serializer.setOutputStream(System.err);
-
-                    S9apiUtils.serialize(runtime, implicitPipeline, serializer);
-                }
-
-                pipeline = runtime.use(implicitPipeline);
-            } else if (config.pipeline != null) {
-                XdmNode doc = config.pipeline.read();
-                pipeline = runtime.use(doc);
-            } else {
-                throw new UnsupportedOperationException("Either a pipeline or libraries and / or steps must be given");
-            }
-
             // Process parameters from the configuration...
             for (String port : config.params.keySet()) {
                 Map<QName, String> parameters = config.params.get(port);
@@ -182,7 +178,8 @@ public class Main {
                 setParametersOnPipeline(pipeline, port, parameters);
             }
 
-            Set<String> ports = pipeline.getInputs();
+            final XPipeline xpipeline = pipeline.getUnderlyingPipeline();
+            Set<String> ports = xpipeline.getInputs();
             Set<String> userArgsInputPorts = userArgs.getInputPorts();
             Set<String> cfgInputPorts = config.inputs.keySet();
             Set<String> allPorts = new HashSet<String>();
@@ -192,8 +189,8 @@ public class Main {
             // map a given input without port specification to the primary non-parameter input implicitly
             for (String port : ports) {
                 if (!allPorts.contains(port) && allPorts.contains(null)
-                        && pipeline.getDeclareStep().getInput(port).getPrimary()
-                        && !pipeline.getDeclareStep().getInput(port).getParameterInput()) {
+                        && xpipeline.getDeclareStep().getInput(port).getPrimary()
+                        && !xpipeline.getDeclareStep().getInput(port).getParameterInput()) {
 
                     if (userArgsInputPorts.contains(null)) {
                         userArgs.setDefaultInputPort(port);
@@ -213,13 +210,12 @@ public class Main {
 
                 if (userArgsInputPorts.contains(port)) {
                     for (Input input : userArgs.getInputs(port)) {
-                        XdmNode doc = runtime.parse(input);
-                        pipeline.writeTo(port, doc);
+                        pipeline.writeInput(port, input);
                     }
                 } else {
                     for (ReadablePipe pipe : config.inputs.get(port)) {
                         XdmNode doc = pipe.read();
-                        pipeline.writeTo(port, doc);
+                        pipeline.writeInput(port, doc);
                     }
                 }
             }
@@ -228,22 +224,22 @@ public class Main {
             String implicitPort = null;
             for (String port : ports) {
                 if (!allPorts.contains(port)) {
-                    if (pipeline.getDeclareStep().getInput(port).getPrimary()
-                            && !pipeline.getDeclareStep().getInput(port).getParameterInput()) {
+                    if (xpipeline.getDeclareStep().getInput(port).getPrimary()
+                            && !xpipeline.getDeclareStep().getInput(port).getParameterInput()) {
                         implicitPort = port;
                     }
                 }
             }
 
-            if (implicitPort != null && !pipeline.hasReadablePipes(implicitPort)) {
-                XdmNode doc = runtime.parse(new InputSource(System.in));
-                pipeline.writeTo(implicitPort, doc);
+            if (implicitPort != null && !xpipeline.hasReadablePipes(implicitPort)) {
+                XdmNode doc = pipeline.getRuntime().parse(new InputSource(System.in));
+                pipeline.writeInput(implicitPort, doc);
             }
 
             Map<String, Output> portOutputs = new HashMap<String, Output>();
 
             Map<String, Output> userArgsOutputs = userArgs.getOutputs();
-            for (String port : pipeline.getOutputs()) {
+            for (String port : xpipeline.getOutputs()) {
                 // Bind to "-" implicitly
                 Output output = null;
 
@@ -252,7 +248,7 @@ public class Main {
                 } else if (config.outputs.containsKey(port)) {
                     output = new Output(config.outputs.get(port));
                 } else if (userArgsOutputs.containsKey(null)
-                        && pipeline.getDeclareStep().getOutput(port).getPrimary()) {
+                        && xpipeline.getDeclareStep().getOutput(port).getPrimary()) {
                     // Bind unnamed port to primary output port
                     output = userArgsOutputs.get(null);
                 }
@@ -277,7 +273,7 @@ public class Main {
 
             pipeline.run();
 
-            for (String port : pipeline.getOutputs()) {
+            for (String port : xpipeline.getOutputs()) {
                 Output output;
                 if (portOutputs.containsKey(port)) {
                     output = portOutputs.get(port);
@@ -304,97 +300,19 @@ public class Main {
                     }
                 }
 
-                Serialization serial = pipeline.getSerialization(port);
-
-                if (serial == null) {
-                    // Use the configuration options
-                    // FIXME: should each of these be considered separately?
-                    // FIXME: should there be command-line options to override these settings?
-                    serial = new Serialization(runtime, pipeline.getNode()); // The node's a hack
-                    for (String name : config.serializationOptions.keySet()) {
-                        String value = config.serializationOptions.get(name);
-
-                        if ("byte-order-mark".equals(name)) serial.setByteOrderMark("true".equals(value));
-                        if ("escape-uri-attributes".equals(name)) serial.setEscapeURIAttributes("true".equals(value));
-                        if ("include-content-type".equals(name)) serial.setIncludeContentType("true".equals(value));
-                        if ("indent".equals(name)) serial.setIndent("true".equals(value));
-                        if ("omit-xml-declaration".equals(name)) serial.setOmitXMLDeclaration("true".equals(value));
-                        if ("undeclare-prefixes".equals(name)) serial.setUndeclarePrefixes("true".equals(value));
-                        if ("method".equals(name)) serial.setMethod(new QName("", value));
-
-                        // FIXME: if ("cdata-section-elements".equals(name)) serial.setCdataSectionElements();
-                        if ("doctype-public".equals(name)) serial.setDoctypePublic(value);
-                        if ("doctype-system".equals(name)) serial.setDoctypeSystem(value);
-                        if ("encoding".equals(name)) serial.setEncoding(value);
-                        if ("media-type".equals(name)) serial.setMediaType(value);
-                        if ("normalization-form".equals(name)) serial.setNormalizationForm(value);
-                        if ("standalone".equals(name)) serial.setStandalone(value);
-                        if ("version".equals(name)) serial.setVersion(value);
-                    }
-                }
-
-                WritableDocument wd = createWriteableDocument(runtime, serial, output);
-
-                try {
-                    ReadablePipe rpipe = pipeline.readFrom(port);
-                    while (rpipe.moreDocuments()) {
-                        wd.write(rpipe.read());
-                    }
-                } finally {
-                    if (output != null) {
-                        wd.close();
-                    }
-                }
+                pipeline.copyOutputs(port, output);
             }
 
             return portOutputs.containsValue(null);
         }
         finally {
             // Here all memory should be freed by the next gc, right?
-            runtime.close();
+            pipeline.close();
         }
-    }
-
-    /**
-     * Creates a WriteableDocument for the given output.
-     * 
-     * @throws URISyntaxException
-     *              if the output URI has a syntax problem
-     * @throws FileNotFoundException
-     *              if a file can't be created from the output URI 
-     */
-    public static WritableDocument createWriteableDocument(
-            XProcRuntime runtime,
-            Serialization serial, 
-            Output output)
-            throws URISyntaxException, FileNotFoundException {
-        // I wonder if there's a better way...
-        WritableDocument wd = null;
-        if (output == null) {
-            wd = new WritableDocument(runtime, null, serial);
-        } else {
-            switch (output.getKind()) {
-                case URI:
-                    URI furi = new URI(output.getUri());
-                    String filename = furi.getPath();
-                    FileOutputStream outfile = new FileOutputStream(filename);
-                    wd = new WritableDocument(runtime, filename, serial, outfile);
-                    break;
-        
-                case OUTPUT_STREAM:
-                    OutputStream outputStream = output.getOutputStream();
-                    wd = new WritableDocument(runtime, null, serial, outputStream);
-                    break;
-        
-                default:
-                    throw new UnsupportedOperationException(format("Unsupported output kind '%s'", output.getKind()));
-            }
-        }
-        return wd;
     }
 
     
-    public static void setParametersOnPipeline(XPipeline pipeline, String port, Map<QName, String> parameters) {
+    private static void setParametersOnPipeline(PipelineWrapper pipeline, String port, Map<QName, String> parameters) {
         if ("*".equals(port)) {
             for (QName name : parameters.keySet()) {
                 pipeline.setParameter(name, new RuntimeValue(parameters.get(name)));
@@ -430,11 +348,8 @@ public class Main {
         System.exit(1);
     }
 
-    private String errorMessage(QName code) {
-        if (errorRegistry == null) {
-        	errorRegistry = new ErrorMessageRegistry(config.getProcessor().newDocumentBuilder());
-        }
-        return errorRegistry.lookup(code);
+    private String errorMessage(XProcException e) {
+        return calabash.lookupErrorMessage(e);
     }
     
 

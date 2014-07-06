@@ -37,7 +37,7 @@ public class Piperack {
 
         if (userArgs.isShowVersion()) {
             System.out.println("Piperack, a web server for running XProc pipelines.");
-            XProcConfiguration.showVersion(runtime);
+            XProcConfiguration.showVersion(config);
         }
 
         // Create a component

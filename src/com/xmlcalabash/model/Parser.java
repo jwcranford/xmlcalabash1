@@ -79,7 +79,7 @@ public class Parser {
         declStack = new Stack<DeclareStep> ();
     }
 
-    public DeclareStep loadPipeline(InputStream inputStream) throws SaxonApiException, IOException {
+    public DeclareStep loadPipeline(InputStream inputStream) throws IOException {
         try {
             XdmNode doc = runtime.parse(new InputSource(inputStream));
             return loadPipeline(doc);
@@ -88,16 +88,16 @@ public class Parser {
         }
     }
 
-    public DeclareStep loadPipeline(String uri) throws SaxonApiException {
+    public DeclareStep loadPipeline(String uri) {
         return loadPipeline(uri, URIUtils.cwdAsURI().toASCIIString());
     }
 
-    public DeclareStep loadPipeline(String uri, String base) throws SaxonApiException {
+    public DeclareStep loadPipeline(String uri, String base) {
         XdmNode doc = runtime.parse(uri, base);
         return loadPipeline(doc);
     }
 
-    private DeclareStep loadPipeline(XdmNode doc) throws SaxonApiException {
+    private DeclareStep loadPipeline(XdmNode doc) {
         XdmNode root = S9apiUtils.getDocumentElement(doc);
 
         if (!XProcConstants.p_declare_step.equals(root.getNodeName())

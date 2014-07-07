@@ -73,7 +73,7 @@ public abstract class XStep implements XProcRunnable
     public void addInput(XInput input) {
         String port = input.getPort();
         if (xinputs.containsKey(port)) {
-            throw new XProcException(input.getNode(), "Attempt to add output '" + port + "' port to the same step twice.");
+            throw new XProcException(input.getNode(), "Attempt to add input '" + port + "' port to the same step twice.");
         }
         xinputs.put(port, input);
     }

@@ -593,9 +593,6 @@ public class XProcRuntime {
 
         try {
             return _load(pipeline);
-        } catch (SaxonApiException sae) {
-            error(sae);
-            throw sae;
         } catch (XProcException xe) {
             error(xe);
             throw xe;
@@ -605,7 +602,7 @@ public class XProcRuntime {
         }
     }
 
-    private XPipeline _load(Input pipelineInput) throws SaxonApiException, IOException {
+    private XPipeline _load(Input pipelineInput) throws IOException {
         reset();
         configurer.getXMLCalabashConfigurer().configRuntime(this);
         switch (pipelineInput.getKind()) {
@@ -790,9 +787,6 @@ public class XProcRuntime {
 
         try {
             loader = _load(new Input(loaderURI));
-        } catch (SaxonApiException sae) {
-            error(sae);
-            throw sae;
         } catch (XProcException xe) {
             error(xe);
             throw xe;

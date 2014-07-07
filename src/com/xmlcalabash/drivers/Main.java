@@ -66,7 +66,7 @@ import static java.lang.String.format;
  */
 public class Main {
     private static int exitStatus = 0;
-    private XProcRuntime runtime = null;
+    private XProcConfiguration config = null;
     private Logger logger = Logger.getLogger(this.getClass().getName());
     private boolean debug = false;
     private ErrorMessageRegistry errorRegistry = null;
@@ -129,168 +129,167 @@ public class Main {
             if (debug) {
                 err.printStackTrace();
             }
-        } finally {
-            // Here all memory should be freed by the next gc, right?
-            runtime.close();
-        }
+        } 
     }
 
     public boolean run(UserArgs userArgs, XProcConfiguration config) throws SaxonApiException, IOException, URISyntaxException {
-        runtime = new XProcRuntime(config);
-        debug = config.debug;
+        this.config = config;
+        final XProcRuntime runtime = new XProcRuntime(config);
+        try {
+            debug = config.debug;
 
-        if (userArgs.isShowVersion()) {
-            XProcConfiguration.showVersion(runtime);
-        }
-
-        XPipeline pipeline = null;
-
-        if (userArgs.getPipeline() != null) {
-            pipeline = runtime.load(userArgs.getPipeline());
-        } else if (userArgs.hasImplicitPipeline()) {
-            XdmNode implicitPipeline = userArgs.getImplicitPipeline(runtime);
-
-            if (debug) {
-                System.err.println("Implicit pipeline:");
-
-                Serializer serializer = new Serializer();
-
-                serializer.setOutputProperty(Serializer.Property.INDENT, "yes");
-                serializer.setOutputProperty(Serializer.Property.METHOD, "xml");
-
-                serializer.setOutputStream(System.err);
-
-                S9apiUtils.serialize(runtime, implicitPipeline, serializer);
+            if (userArgs.isShowVersion()) {
+                XProcConfiguration.showVersion(config);
             }
 
-            pipeline = runtime.use(implicitPipeline);
-        } else if (config.pipeline != null) {
-            XdmNode doc = config.pipeline.read();
-            pipeline = runtime.use(doc);
-        } else {
-            throw new UnsupportedOperationException("Either a pipeline or libraries and / or steps must be given");
-        }
+            XPipeline pipeline = null;
 
-        // Process parameters from the configuration...
-        for (String port : config.params.keySet()) {
-            Map<QName, String> parameters = config.params.get(port);
-            setParametersOnPipeline(pipeline, port, parameters);
-        }
+            if (userArgs.getPipeline() != null) {
+                pipeline = runtime.load(userArgs.getPipeline());
+            } else if (userArgs.hasImplicitPipeline()) {
+                XdmNode implicitPipeline = userArgs.getImplicitPipeline(runtime);
 
-        // Now process parameters from the command line...
-        for (String port : userArgs.getParameterPorts()) {
-            Map<QName, String> parameters = userArgs.getParameters(port);
-            setParametersOnPipeline(pipeline, port, parameters);
-        }
+                if (debug) {
+                    System.err.println("Implicit pipeline:");
 
-        Set<String> ports = pipeline.getInputs();
-        Set<String> userArgsInputPorts = userArgs.getInputPorts();
-        Set<String> cfgInputPorts = config.inputs.keySet();
-        Set<String> allPorts = new HashSet<String>();
-        allPorts.addAll(userArgsInputPorts);
-        allPorts.addAll(cfgInputPorts);
+                    Serializer serializer = new Serializer();
 
-        // map a given input without port specification to the primary non-parameter input implicitly
-        for (String port : ports) {
-            if (!allPorts.contains(port) && allPorts.contains(null)
-                && pipeline.getDeclareStep().getInput(port).getPrimary()
-                && !pipeline.getDeclareStep().getInput(port).getParameterInput()) {
+                    serializer.setOutputProperty(Serializer.Property.INDENT, "yes");
+                    serializer.setOutputProperty(Serializer.Property.METHOD, "xml");
 
-                if (userArgsInputPorts.contains(null)) {
-                    userArgs.setDefaultInputPort(port);
-                    allPorts.remove(null);
-                    allPorts.add(port);
+                    serializer.setOutputStream(System.err);
+
+                    S9apiUtils.serialize(runtime, implicitPipeline, serializer);
                 }
-                break;
-            }
-        }
 
-        for (String port : allPorts) {
-            if (!ports.contains(port)) {
-                throw new XProcException("There is a binding for the port '" + port + "' but the pipeline declares no such port.");
-            }
-
-            pipeline.clearInputs(port);
-
-            if (userArgsInputPorts.contains(port)) {
-                for (Input input : userArgs.getInputs(port)) {
-                    XdmNode doc = runtime.parse(input);
-                    pipeline.writeTo(port, doc);
-                }
+                pipeline = runtime.use(implicitPipeline);
+            } else if (config.pipeline != null) {
+                XdmNode doc = config.pipeline.read();
+                pipeline = runtime.use(doc);
             } else {
-                for (ReadablePipe pipe : config.inputs.get(port)) {
-                    XdmNode doc = pipe.read();
-                    pipeline.writeTo(port, doc);
-                }
+                throw new UnsupportedOperationException("Either a pipeline or libraries and / or steps must be given");
             }
-        }
 
-        // Implicit binding for stdin?
-        String implicitPort = null;
-        for (String port : ports) {
-            if (!allPorts.contains(port)) {
-                if (pipeline.getDeclareStep().getInput(port).getPrimary()
+            // Process parameters from the configuration...
+            for (String port : config.params.keySet()) {
+                Map<QName, String> parameters = config.params.get(port);
+                setParametersOnPipeline(pipeline, port, parameters);
+            }
+
+            // Now process parameters from the command line...
+            for (String port : userArgs.getParameterPorts()) {
+                Map<QName, String> parameters = userArgs.getParameters(port);
+                setParametersOnPipeline(pipeline, port, parameters);
+            }
+
+            Set<String> ports = pipeline.getInputs();
+            Set<String> userArgsInputPorts = userArgs.getInputPorts();
+            Set<String> cfgInputPorts = config.inputs.keySet();
+            Set<String> allPorts = new HashSet<String>();
+            allPorts.addAll(userArgsInputPorts);
+            allPorts.addAll(cfgInputPorts);
+
+            // map a given input without port specification to the primary non-parameter input implicitly
+            for (String port : ports) {
+                if (!allPorts.contains(port) && allPorts.contains(null)
+                        && pipeline.getDeclareStep().getInput(port).getPrimary()
                         && !pipeline.getDeclareStep().getInput(port).getParameterInput()) {
-                    implicitPort = port;
+
+                    if (userArgsInputPorts.contains(null)) {
+                        userArgs.setDefaultInputPort(port);
+                        allPorts.remove(null);
+                        allPorts.add(port);
+                    }
+                    break;
                 }
             }
-        }
 
-        if (implicitPort != null && !pipeline.hasReadablePipes(implicitPort)) {
-            XdmNode doc = runtime.parse(new InputSource(System.in));
-            pipeline.writeTo(implicitPort, doc);
-        }
+            for (String port : allPorts) {
+                if (!ports.contains(port)) {
+                    throw new XProcException("There is a binding for the port '" + port + "' but the pipeline declares no such port.");
+                }
 
-        Map<String, Output> portOutputs = new HashMap<String, Output>();
+                pipeline.clearInputs(port);
 
-        Map<String, Output> userArgsOutputs = userArgs.getOutputs();
-        for (String port : pipeline.getOutputs()) {
-            // Bind to "-" implicitly
-            Output output = null;
-
-            if (userArgsOutputs.containsKey(port)) {
-                output = userArgsOutputs.get(port);
-            } else if (config.outputs.containsKey(port)) {
-                output = new Output(config.outputs.get(port));
-            } else if (userArgsOutputs.containsKey(null)
-                       && pipeline.getDeclareStep().getOutput(port).getPrimary()) {
-                // Bind unnamed port to primary output port
-                output = userArgsOutputs.get(null);
+                if (userArgsInputPorts.contains(port)) {
+                    for (Input input : userArgs.getInputs(port)) {
+                        XdmNode doc = runtime.parse(input);
+                        pipeline.writeTo(port, doc);
+                    }
+                } else {
+                    for (ReadablePipe pipe : config.inputs.get(port)) {
+                        XdmNode doc = pipe.read();
+                        pipeline.writeTo(port, doc);
+                    }
+                }
             }
 
-            // Look for explicit binding to "-"
-            if ((output != null) && (output.getKind() == Kind.URI) && "-".equals(output.getUri())) {
-                output = null;
+            // Implicit binding for stdin?
+            String implicitPort = null;
+            for (String port : ports) {
+                if (!allPorts.contains(port)) {
+                    if (pipeline.getDeclareStep().getInput(port).getPrimary()
+                            && !pipeline.getDeclareStep().getInput(port).getParameterInput()) {
+                        implicitPort = port;
+                    }
+                }
             }
 
-            portOutputs.put(port, output);
-        }
-
-        for (QName optname : config.options.keySet()) {
-            RuntimeValue value = new RuntimeValue(config.options.get(optname), null, null);
-            pipeline.passOption(optname, value);
-        }
-
-        for (QName optname : userArgs.getOptionNames()) {
-            RuntimeValue value = new RuntimeValue(userArgs.getOption(optname), null, null);
-            pipeline.passOption(optname, value);
-        }
-
-        pipeline.run();
-
-        for (String port : pipeline.getOutputs()) {
-            Output output;
-            if (portOutputs.containsKey(port)) {
-                output = portOutputs.get(port);
-            } else {
-                // You didn't bind it, and it isn't going to stdout, so it's going into the bit bucket.
-                continue;
+            if (implicitPort != null && !pipeline.hasReadablePipes(implicitPort)) {
+                XdmNode doc = runtime.parse(new InputSource(System.in));
+                pipeline.writeTo(implicitPort, doc);
             }
 
-            if ((output == null) || ((output.getKind() == OUTPUT_STREAM) && System.out.equals(output.getOutputStream()))) {
-                finest(logger, null, "Copy output from " + port + " to stdout");
-            } else {
-                switch (output.getKind()) {
+            Map<String, Output> portOutputs = new HashMap<String, Output>();
+
+            Map<String, Output> userArgsOutputs = userArgs.getOutputs();
+            for (String port : pipeline.getOutputs()) {
+                // Bind to "-" implicitly
+                Output output = null;
+
+                if (userArgsOutputs.containsKey(port)) {
+                    output = userArgsOutputs.get(port);
+                } else if (config.outputs.containsKey(port)) {
+                    output = new Output(config.outputs.get(port));
+                } else if (userArgsOutputs.containsKey(null)
+                        && pipeline.getDeclareStep().getOutput(port).getPrimary()) {
+                    // Bind unnamed port to primary output port
+                    output = userArgsOutputs.get(null);
+                }
+
+                // Look for explicit binding to "-"
+                if ((output != null) && (output.getKind() == Kind.URI) && "-".equals(output.getUri())) {
+                    output = null;
+                }
+
+                portOutputs.put(port, output);
+            }
+
+            for (QName optname : config.options.keySet()) {
+                RuntimeValue value = new RuntimeValue(config.options.get(optname), null, null);
+                pipeline.passOption(optname, value);
+            }
+
+            for (QName optname : userArgs.getOptionNames()) {
+                RuntimeValue value = new RuntimeValue(userArgs.getOption(optname), null, null);
+                pipeline.passOption(optname, value);
+            }
+
+            pipeline.run();
+
+            for (String port : pipeline.getOutputs()) {
+                Output output;
+                if (portOutputs.containsKey(port)) {
+                    output = portOutputs.get(port);
+                } else {
+                    // You didn't bind it, and it isn't going to stdout, so it's going into the bit bucket.
+                    continue;
+                }
+
+                if ((output == null) || ((output.getKind() == OUTPUT_STREAM) && System.out.equals(output.getOutputStream()))) {
+                    finest(logger, null, "Copy output from " + port + " to stdout");
+                } else {
+                    switch (output.getKind()) {
                     case URI:
                         finest(logger, null, "Copy output from " + port + " to " + output.getUri());
                         break;
@@ -302,53 +301,58 @@ public class Main {
 
                     default:
                         throw new UnsupportedOperationException(format("Unsupported output kind '%s'", output.getKind()));
+                    }
+                }
+
+                Serialization serial = pipeline.getSerialization(port);
+
+                if (serial == null) {
+                    // Use the configuration options
+                    // FIXME: should each of these be considered separately?
+                    // FIXME: should there be command-line options to override these settings?
+                    serial = new Serialization(runtime, pipeline.getNode()); // The node's a hack
+                    for (String name : config.serializationOptions.keySet()) {
+                        String value = config.serializationOptions.get(name);
+
+                        if ("byte-order-mark".equals(name)) serial.setByteOrderMark("true".equals(value));
+                        if ("escape-uri-attributes".equals(name)) serial.setEscapeURIAttributes("true".equals(value));
+                        if ("include-content-type".equals(name)) serial.setIncludeContentType("true".equals(value));
+                        if ("indent".equals(name)) serial.setIndent("true".equals(value));
+                        if ("omit-xml-declaration".equals(name)) serial.setOmitXMLDeclaration("true".equals(value));
+                        if ("undeclare-prefixes".equals(name)) serial.setUndeclarePrefixes("true".equals(value));
+                        if ("method".equals(name)) serial.setMethod(new QName("", value));
+
+                        // FIXME: if ("cdata-section-elements".equals(name)) serial.setCdataSectionElements();
+                        if ("doctype-public".equals(name)) serial.setDoctypePublic(value);
+                        if ("doctype-system".equals(name)) serial.setDoctypeSystem(value);
+                        if ("encoding".equals(name)) serial.setEncoding(value);
+                        if ("media-type".equals(name)) serial.setMediaType(value);
+                        if ("normalization-form".equals(name)) serial.setNormalizationForm(value);
+                        if ("standalone".equals(name)) serial.setStandalone(value);
+                        if ("version".equals(name)) serial.setVersion(value);
+                    }
+                }
+
+                WritableDocument wd = createWriteableDocument(runtime, serial, output);
+
+                try {
+                    ReadablePipe rpipe = pipeline.readFrom(port);
+                    while (rpipe.moreDocuments()) {
+                        wd.write(rpipe.read());
+                    }
+                } finally {
+                    if (output != null) {
+                        wd.close();
+                    }
                 }
             }
 
-            Serialization serial = pipeline.getSerialization(port);
-
-            if (serial == null) {
-                // Use the configuration options
-                // FIXME: should each of these be considered separately?
-                // FIXME: should there be command-line options to override these settings?
-                serial = new Serialization(runtime, pipeline.getNode()); // The node's a hack
-                for (String name : config.serializationOptions.keySet()) {
-                    String value = config.serializationOptions.get(name);
-
-                    if ("byte-order-mark".equals(name)) serial.setByteOrderMark("true".equals(value));
-                    if ("escape-uri-attributes".equals(name)) serial.setEscapeURIAttributes("true".equals(value));
-                    if ("include-content-type".equals(name)) serial.setIncludeContentType("true".equals(value));
-                    if ("indent".equals(name)) serial.setIndent("true".equals(value));
-                    if ("omit-xml-declaration".equals(name)) serial.setOmitXMLDeclaration("true".equals(value));
-                    if ("undeclare-prefixes".equals(name)) serial.setUndeclarePrefixes("true".equals(value));
-                    if ("method".equals(name)) serial.setMethod(new QName("", value));
-
-                    // FIXME: if ("cdata-section-elements".equals(name)) serial.setCdataSectionElements();
-                    if ("doctype-public".equals(name)) serial.setDoctypePublic(value);
-                    if ("doctype-system".equals(name)) serial.setDoctypeSystem(value);
-                    if ("encoding".equals(name)) serial.setEncoding(value);
-                    if ("media-type".equals(name)) serial.setMediaType(value);
-                    if ("normalization-form".equals(name)) serial.setNormalizationForm(value);
-                    if ("standalone".equals(name)) serial.setStandalone(value);
-                    if ("version".equals(name)) serial.setVersion(value);
-                }
-            }
-
-            WritableDocument wd = createWriteableDocument(runtime, serial, output);
-            
-            try {
-                ReadablePipe rpipe = pipeline.readFrom(port);
-                while (rpipe.moreDocuments()) {
-                    wd.write(rpipe.read());
-                }
-            } finally {
-                if (output != null) {
-                    wd.close();
-                }
-            }
+            return portOutputs.containsValue(null);
         }
-
-        return portOutputs.containsValue(null);
+        finally {
+            // Here all memory should be freed by the next gc, right?
+            runtime.close();
+        }
     }
 
     /**
@@ -404,7 +408,7 @@ public class Main {
 
     private void usage() throws IOException {
         System.out.println();
-        XProcConfiguration.showVersion(runtime);
+        XProcConfiguration.showVersion(config);
 
         InputStream instream = getClass().getResourceAsStream("/etc/usage.txt");
         if (instream == null) {
@@ -428,7 +432,7 @@ public class Main {
 
     private String errorMessage(QName code) {
         if (errorRegistry == null) {
-        	errorRegistry = new ErrorMessageRegistry(runtime.getProcessor().newDocumentBuilder());
+        	errorRegistry = new ErrorMessageRegistry(config.getProcessor().newDocumentBuilder());
         }
         return errorRegistry.lookup(code);
     }

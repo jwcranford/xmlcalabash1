@@ -46,11 +46,13 @@ import org.xml.sax.InputSource;
  */
 public final class ErrorMessageRegistry {
 
-	public static final String UNKNOWN_ERROR = "Unknown error";
+	private static final String DEFAULT_UNKNOWN_ERROR = "Unknown error";
 
     private static final QName _code = new QName("code");
 	
 	private final Map<String, String> registry = new HashMap<String,String>();
+	
+	private static String unknownErrorMessage = DEFAULT_UNKNOWN_ERROR;
 	
 	public ErrorMessageRegistry(final DocumentBuilder builder) {
 		InputStream instream = getClass().getResourceAsStream("/etc/error-list.xml");
@@ -79,7 +81,7 @@ public final class ErrorMessageRegistry {
 	/**
 	 * Returns the error message that matches the given code.
 	 *  
-	 * @return registered error message, or UNKNOWN_ERROR if nothing matches
+	 * @return registered error message, or unknownErrorMessage if nothing matches
 	 */
 	public String lookup(QName code) {
 		if (code != null) {
@@ -88,7 +90,17 @@ public final class ErrorMessageRegistry {
                 return msg;
             }
         }
-        return UNKNOWN_ERROR;
+        return unknownErrorMessage;
+	}
+
+
+	public static String getUnknownErrorMessage() {
+		return unknownErrorMessage;
+	}
+
+
+	public static void setUnknownErrorMessage(String unknownErrorMessage) {
+		ErrorMessageRegistry.unknownErrorMessage = unknownErrorMessage;
 	}
 
 }

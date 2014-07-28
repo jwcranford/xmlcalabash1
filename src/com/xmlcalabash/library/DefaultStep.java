@@ -7,7 +7,6 @@ import com.xmlcalabash.core.XProcRuntime;
 import com.xmlcalabash.core.XProcStep;
 import com.xmlcalabash.core.XProcConstants;
 import com.xmlcalabash.model.RuntimeValue;
-import com.xmlcalabash.runtime.XStep;
 import net.sf.saxon.s9api.*;
 import net.sf.saxon.Configuration;
 import net.sf.saxon.trans.XPathException;
@@ -20,8 +19,6 @@ import java.util.logging.Logger;
 
 import com.xmlcalabash.runtime.XAtomicStep;
 import com.xmlcalabash.util.S9apiUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 /**
  * Created by IntelliJ IDEA.

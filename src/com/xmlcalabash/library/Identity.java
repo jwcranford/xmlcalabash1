@@ -7,8 +7,6 @@ import com.xmlcalabash.core.XProcRuntime;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmNode;
 import com.xmlcalabash.runtime.XAtomicStep;
-import org.apache.commons.logging.LogFactory;
-import org.apache.commons.logging.Log;
 
 /**
  * Created by IntelliJ IDEA.

@@ -4,6 +4,7 @@ import com.xmlcalabash.piperack.PipelineSource;
 import com.xmlcalabash.util.Input;
 import com.xmlcalabash.util.JSONtoXML;
 import com.xmlcalabash.util.Output;
+
 import net.sf.saxon.Configuration;
 import net.sf.saxon.s9api.Axis;
 import net.sf.saxon.s9api.DocumentBuilder;
@@ -23,6 +24,8 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Vector;
 import java.util.HashSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
@@ -70,6 +73,7 @@ public class XProcConfiguration {
     public static final QName _loader = new QName("", "loader");
     public static final QName _exclude_inline_prefixes = new QName("", "exclude-inline-prefixes");
 
+    private final Logger LOG = Logger.getLogger(getClass().getName());
     public String saxonProcessor = "he";
     public boolean schemaAware = false;
     public Input saxonConfig = null;
@@ -939,9 +943,9 @@ public class XProcConfiguration {
                 Class<?> klass = Class.forName(value);
                 implementations.put(name, klass);
             } catch (ClassNotFoundException e) {
-                // nop
+                LOG.log(Level.FINEST, "implementation class not found: {0}", e.getMessage());
             } catch (NoClassDefFoundError e) {
-                // nop
+                LOG.log(Level.FINEST, "no class definition found for implementation: {0}", e.getMessage());
             }
         }
     }
